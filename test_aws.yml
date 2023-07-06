@@ -1,0 +1,32 @@
+---
+ - name: test_aws
+   hosts: "{{ nodes }}"
+   tasks:
+     - name: AWS Assume Role
+       sts_assume_role:
+         duration_seconds: 3000
+         region: "{{ region }}"
+         role_arn: "{{ role_arn }}"
+         role_session_name: "ansible-test-session"
+       register: aws_credentials
+     - name: List S3 Buckets
+       aws_s3_bucket_info:
+         aws_access_key: "{{ aws_credentials.sts_creds.access_key }}"
+         aws_secret_key: "{{ aws_credentials.sts_creds.secret_key }}"
+         security_token: "{{ aws_credentials.sts_creds.session_token }}"
+       register: buckets
+     - name: List Bucket contents
+       aws_s3:
+         aws_access_key: "{{ aws_credentials.sts_creds.access_key }}"
+         aws_secret_key: "{{ aws_credentials.sts_creds.secret_key }}"
+         security_token: "{{ aws_credentials.sts_creds.session_token }}"
+         bucket: "{{ item.name }}"
+         object: "*"
+         mode: list
+       loop: "{{ buckets.buckets }}"
+       register: bucket_objects
+     - name: Print Bucket objects
+       debug:
+         msg: "{{ item.item.name }}: {{ item.s3_keys }}"
+       loop: "{{ bucket_objects.results }}"
+
