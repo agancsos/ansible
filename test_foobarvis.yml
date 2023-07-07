@@ -1,0 +1,26 @@
+---
+ - name: foobarviz
+   hosts: "{{ nodes }}"
+   tasks:
+      - name: Set range
+        set_fact:
+           ranger: '{{ range(1, vars["max"], 1)|list }}'
+      - name: FOO
+        debug:
+            msg: "FOO"
+        when: item % 2 == 0
+        loop: "{{ ranger }}"
+      - name: BAR
+        debug:
+            msg: "BAR"
+        when: item % 3 == 0
+        loop: "{{ ranger }}"
+      - name: VIZ
+        debug:
+            msg: "VIZ"
+        when:
+           - item % 2 != 0
+           - item % 3 != 0
+        loop: "{{ ranger }}"
+        
+
