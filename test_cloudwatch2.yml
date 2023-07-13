@@ -1,0 +1,37 @@
+---
+ - name: test_cloudwatch2
+   hosts: "{{ nodes }}"
+   tasks:
+      - name: AWS Assume Role
+        sts_assume_role:
+          duration_seconds: 3000
+          region: "{{ region }}"
+          role_arn: "{{ role_arn }}"
+          role_session_name: "ansible-test-session"
+        register: aws_credentials
+      - name: List CloudWatch Log Groups
+        shell: | 
+           AWS_ACCESS_KEY_ID='{{ aws_credentials.sts_creds.access_key }}' 
+           AWS_SECRET_ACCESS_KEY='{{ aws_credentials.sts_creds.secret_key }}'
+           AWS_SESSION_TOKEN='{{ aws_credentials.sts_creds.session_token }}'
+           aws logs describe-log-groups --region {{ region }} 
+        register: log_groups
+      - set_fact:
+           log_groups_json: "{{ log_groups.stdout }}"
+      - name: Filter CloudWatch Events
+        shell: |
+           AWS_ACCESS_KEY_ID='{{ aws_credentials.sts_creds.access_key }}' 
+           AWS_SECRET_ACCESS_KEY='{{ aws_credentials.sts_creds.secret_key }}'
+           AWS_SESSION_TOKEN='{{ aws_credentials.sts_creds.session_token }}'
+           aws logs filter-log-events --filter-pattern {{ filter }} --region {{ region }} --log-group-name {{ item.logGroupName }}
+        register: events
+        loop: "{{ log_groups_json.logGroups }}"
+        when: "item.logGroupName is not search('cloudtrail')"
+      - set_fact:
+           events_json: "{{ item.stdout }}"
+        loop: "{{ events.results }}"
+      - name: Print CloudWatch Events
+        debug:
+           msg: "{{ item.logStreamName }}"
+        loop: "{{ events_json.events }}"
+
