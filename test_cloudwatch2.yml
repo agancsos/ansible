@@ -23,7 +23,7 @@
            AWS_ACCESS_KEY_ID='{{ aws_credentials.sts_creds.access_key }}' 
            AWS_SECRET_ACCESS_KEY='{{ aws_credentials.sts_creds.secret_key }}'
            AWS_SESSION_TOKEN='{{ aws_credentials.sts_creds.session_token }}'
-           aws logs filter-log-events --filter-pattern {{ filter }} --region {{ region }} --log-group-name {{ item.logGroupName }}
+           aws logs filter-log-events --filter-pattern '{{ filter }}' --region {{ region }} --log-group-name {{ item.logGroupName }}
         register: events
         loop: "{{ log_groups_json.logGroups }}"
         when: "item.logGroupName is not search('cloudtrail')"
