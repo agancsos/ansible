@@ -1,0 +1,40 @@
+---
+ - name: veracrypt_deploy
+   hosts: "{{ nodes }}"
+   tasks:
+     - shell:
+         cmd: "uname -s"
+       register: platform
+     - shell:
+         cmd: |
+           hdiutil attach '{{ src_path }}/macfuse-4.5.0.dmg';
+           installer -package '/Volumes/macFUSE/Install macFUSE.pkg' -target /;
+           diskutil umount '/Volumes/macFUSE';
+           hdiutil attach '{{ src_path }}/VeraCrypt_{{ veracrypt_version }}.dmg';
+           installer -package '/Volumes/VeraCrypt for OSX/VeraCrypt_Installer.pkg' -target /;
+           diskutil umount '/Volumes/VeraCrypt for OSX'
+       when: platform.stdout == "Darwin"
+     - name: Extracting Linux distribution
+       shell:
+         cmd: "grep '^NAME=' /etc/os-release | cut -f 2 -d'\"'"
+       when: platform.stdout == 'Linux'
+       register: os_name
+     - name: Installing on Red Hat
+       shell:
+         cmd: "wget https://launchpad.net/veracrypt/trunk/{{ veracrypt_version }}/+download/veracrypt-console-{{ veracrypt_version }}-CentOS-8-x86_64.rpm;  rpm -i veracrypt-console-{{ veracrypt_version }}-CentOS-8-x86_64.rpm"
+       when:
+         - platform.stdout == 'Linux'
+         - os_name.stdout == 'Red Hat Enterprise Linux'
+     - name: Installing on Debian
+       shell:
+         cmd: "wget https://launchpad.net/veracrypt/trunk/{{ veracrypt_version }}/+download/veracrypt-console-{{ veracrypt_version }}-Debian-11-amd64.deb; apt-get install -y veracrypt-console-{{ veracrypt_version }}-Debian-11-amd64.deb"
+       when:
+         - platform.stdout == 'Linux'
+         - os_name.stdout == 'Debian GNU/Linux'
+     - name: Installing on SUSE
+       shell:
+         cmd: "wget https://launchpad.net/veracrypt/trunk/{{ veracrypt_version }}/+download/veracrypt-console-{{ veracrypt_version }}-openSUSE-15-x86_64.rpm; rpm -i veracrypt-console-{{ veracrypt_version }}-openSUSE-15-x86_64.rpm"
+       when:
+         - platform.stdout == 'Linux'
+         - os_name.stdout == 'openSUSE Leap'
+
