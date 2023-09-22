@@ -1,0 +1,15 @@
+---
+ - name: test_ethtool
+   hosts: "{{ nodes }}"
+   tasks:
+     - shell: "ip link show | cut -f 2 -d' ' | cut -f 1 -d':' | grep -E '^(\\w+)'"
+       ignore_errors: true
+       register: nics
+     - shell: "ethtool {{ item }}"
+       ignore_errors: true
+       loop: "{{ nics.stdout_lines }}"
+       register: nic_results
+     - debug:
+         msg: "{{ item.stdout_lines  }}"
+       loop: "{{ nic_results.results }}"
+
