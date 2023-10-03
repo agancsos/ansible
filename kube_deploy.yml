@@ -1,0 +1,97 @@
+---
+ - name: kube_deploy
+   hosts: "{{ nodes }}"
+   gather_facts: false
+   tasks:
+     - set_fact:
+         debug: "{{ debug | default('1') }}"
+         kube_version: "{{ kube_version | default('1.24') }}"
+         api_netmask: "{{ api_netmask | default('192.168.1') }}"
+         disable_fwd: "{{ disable_fwd | default('1') }}"
+     - shell: "uname -s"
+       register: platform_name
+     - name: Verify Linux OS
+       meta: end_play
+       when: os_name.stdout != "Linux"
+     - shell: "grep '^NAME=' /etc/os-release | cut -f 2 -d'\"'"
+       register: dist_name
+     - name: Install CRI-O and Kubernetes packages
+       shell: "yum install -y {{ item }}"
+       ignore_errors: true
+       loop:
+         - "cri*"
+         - "kubernetes{{ kube_version }}*"
+       when:
+         - debug != '1'
+         - dist_name.stdout == 'Red Hat Enterprise Linux'
+     - name: Install CRI-O and Kubernetes packages
+       shell: "apt-get install -y {{ item }}"
+       ignore_errors: true
+       loop:
+         - "cri*"
+         - "kubernetes{{ kube_version }}*"
+       when:
+         - debug != '1'
+         - dist_name.stdout == 'Debian GNU/Linux'
+     - name: Install CRI-O and Kubernetes packages
+       shell: "zypper install -y {{ item }}"
+       ignore_errors: true
+       loop:
+         - "cri*"
+         - "kubernetes{{ kube_version }}*"
+       when:
+         - debug != '1'
+         - dist_name.stdout == 'openSUSE Leap'
+     - name: Disabling swappiness
+       shell: "swapoff -a"
+       when: debug != '1'
+     - name: Disableing firewall
+       shell: "systemctl disable --now firewalld"
+       when:
+         - debug != '1'
+         - disable_fwd != '0'
+     - name: Add overlay and br_netfilter for CRI-O
+       shell: "{{ item }}"
+       loop:
+         - "echo 'overlay' >> '/etc/modules-load.d/crio.conf'"
+         - "echo 'br_netfilter' >> '/etc/modules-load.d/crio.conf'"
+         - "modprobe overlay"
+         - "modprobe br_netfilter"
+         - "sysctl --system"
+       when:
+         - debug != '1'
+     - name: Verify kubectl
+       shell: "which kubectl"
+     - name: Verify kubelet
+       shell: "which kubeadm"
+     - shell: "kubeadm version -o json"
+       register: kubeadm_version_raw
+     - set_fact:
+         remote_reg_version: "{{ (kubeadm_version.stdout | from_json).clientVersion.gitVersion | replace('v', '') }}"
+     - name: Enable services
+       shell: "systemctl enable {{ item }}"
+       loop:
+         - "crio"
+         - "kubelet"
+     - name: Add network options for Kubernetes
+       shell: "echo '{{ item }}' >> '/etc/sysctl.d/kubernetes.conf'"
+       when: debug != '1'
+       loop:
+         - "net.bridge.bridge-nf-call-ip6tables = 1"
+		     - "net.bridge.bridge-nf-call-iptables  = 1"
+		     - "net.ipv4.ip_forward                 = 1"
+     - name: Creating cluster through kubeadm
+       shell: |
+         kubeadm init --kubernetes-version={{ remote_reg_version }} \
+           --image-repository registry.k8s.io \
+           --service-cidr=172.17.0.0/16 \
+           --pod-network-cidr=172.18.0.0/16 \
+           --ignore-preflight-errors=all
+       when: debug != '1'
+     - shell: "ls -l /home/"
+       register: target_users
+     - name: Adding configuration to other users
+       shell: "cp '/etc/kubernetes/admin.conf' '/home/{{ item }}/.kube/config' && chown {{ item }} '/home/{{ item }}/.kube/config'"
+       loop: "{{ target_users.stdout_lines }}"
+       when: debug != '1'
+

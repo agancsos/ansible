@@ -1,0 +1,137 @@
+---
+- name: kubeHA
+  hosts: "{{ nodes }}"
+  gather_facts: false
+  tasks:
+    - set_fact:
+        operation:  "{{ operation | default('build', true) }}"
+        proj_name: "{{ proj_name | default('TEMPLATE', true) }}"
+        image_name: "{{ image_name | default('', true )}}"
+        config: "{{ config | default('~/.kube/config', true) }}"
+        lb_port: "{{ lb_port | default('80', true) }}"
+        debug: "{{ debug | default('1', true) }}"
+        min_nodes: "{{ min_nodes | default('2', true) }}"
+        environment: "{{ environment | default('lab', true) }}"
+        application_id: "{{ application_id | default('TEMP', true) }}"
+        data_class: "{{ data_class | default('yellow', true) }}"
+    - name: Ensure kubectl
+      shell: "which kubectl"
+    - shell: "whoami"
+      register: build_user
+    - debug:
+        msg: |
+          Operation: {{ operation }}
+          debug: {{ debug }}
+    # Build up
+    - name: Create Namspace
+      kubernetes.core.k8s:
+        api_version: v1
+        state: present
+        kind: Namespace
+        kubeconfig: "{{ config }}"
+        name: "{{ proj_name }}"
+      when:
+        - operation == "build"
+        - debug != "1"
+    - name: Create Deployment
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ config }}"
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: "{{ proj_name }}_deploy"
+            namespace: "{{ proj_name }}"
+            labels:
+              app: "{{ proj_name }"
+              environment: "{{ environment }}"
+              application_id: "{{ application_id }}"
+              data_class: "{{ data_class }}"
+              created_by: "{{ build_user.stdout }}"
+              name: "{{ proj_name }}_deploy"
+              description: "{{ proj_name }}_deploy"
+          spec:
+            replicas: min_nodes 
+            selector:
+              matchLabels:
+                app: "{{ proj_name }}"
+          template:
+            metaata:
+              labels:
+                app: "{{ proj_name }"
+                environment: "{{ environment }}"
+                application_id: "{{ application_id }}"
+                data_class: "{{ data_class }}"
+                created_by: "{{ build_user.stdout }}"
+                name: "{{ proj_name }}_pod"
+                description: "{{ proj_name }}_pod"
+            spec:
+              containers:
+                - image: "{{ image_name }}"
+                  name: "{{ proj_name }}_pod"
+      when:
+        - operation == "build"
+        - debug != "1"
+    - name: Create LoadBalancer service
+      kubernetes.core.k8s: 
+        state: present
+        kubeconfig: "{{ config }}"
+        definition: 
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: "{{ proj_name }}_lb"
+            namespace: "{{ proj_name }}"
+            labels:
+              environment: "{{ environment }}"
+              application_id: "{{ application_id }}"
+              data_class: "{{ data_class }}"
+              created_by: "{{ build_user.stdout }}"
+              name: "{{ proj_name }}_lb"
+              description: "{{ proj_name }}_lb"
+          spec:
+            type: LoadBalancer
+            selector:
+              app: "{{ proj_name }}"
+            ports:
+              - name: http
+                protocol: TCP
+                port: lb_port
+      when:
+        - operation == "build"
+        - debug != "1"
+
+    # Breakdown               
+    - name: Remove LoadBalancer service 
+      kubernetes.core.k8s:
+        api_version: v1
+        state: absent
+        kind: Service
+        namespace: "{{ proj_name }}"
+        name: "{{ proj_name }}_lb"
+        kubeconfig: "{{ config }}"
+      when:
+        - operation == "clean"
+        - debug != "1"
+    - name: Remove Deployment
+      kubernetes.core.k8s:
+        api_version: v1
+        state: absent
+        kind: Deployment
+        namespace: "{{ proj_name }}"
+        name: "{{ proj_name }}_deploy"
+        kubeconfig: "{{ config }}"
+      when:
+        - operation == "clean"
+        - debug != "1"
+    - name: Remove Namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        state: absent
+        kind: Namespace
+        name: "{{ proj_name }}"
+        kubeconfig: "{{ config }}"
+      when:
+        - operation == "clean"
+        - debug != "1"
