@@ -1,0 +1,69 @@
+---
+- name: configure_crc_public
+  hosts: "{{ nodes }}"
+  tasks:
+    - name: Install dependencies
+      shell: "yum install -y haproxy policycoreutils-python-utils; systemctl enable haproxy"
+      ignore_errors: true
+    - shell: "hostname -I | cut -f 1 -d' '"
+      register: server_ip
+    - name: Backup original HAProxy configuration file
+      copy:
+        src: "/etc/haproxy/haproxy.cfg"
+        dest: "/etc/haproxy/haproxy.cfg.bak"
+    - name: Set new HAProxy configuration file
+      copy:
+        dest: "/etc/haproxy/haproxy.cfg"
+        content: |
+          global
+          defaults
+              log global
+              mode http
+              timeout connect 5000
+              timeout client 5000
+              timeout server 5000
+        
+          frontend apps
+              bind {{ server_ip.stdout }}:80
+              bind {{ server_ip.stdout }}:443
+              option tcplog
+              mode tcp
+              default_backend apps
+        
+          backend apps
+              mode tcp
+              balance roundrobin
+              option ssl-hello-chk
+              server webserver1 {{ crc_ip }}:443 check
+        
+          frontend api
+              bind {{ server_ip.stdout }}:6443
+              option tcplog
+              mode tcp
+              default_backend api
+        
+          backend api
+              mode tcp
+              balance roundrobin
+              option ssl-hello-chk
+              server webserver1 {{ crc_ip }}:6443 check
+    - name: Enable dnsmasq
+      copy:
+        dest: "/etc/NetworkManager/conf.d/use-dnsmasq.conf"
+        content: |
+          [main] 
+          dns=dnsmasq
+    - name: Add external DNS entries for CRC
+      copy:
+        dest: "/etc/NetworkManager/dnsmasq.d/external-crc.conf"
+        content: |
+          address=/apps-crc.testing/{{ server_ip.stdout }}
+          address=/api.crc.testing/{{ server_ip.stdout }}
+    - name: Restart Services
+      shell: "systemctl restart {{ item }}"
+      ignore_errors: true
+      loop:
+        - "NetworkManager"
+        - "haproxy"
+    - debug:
+        msg: "Please add the following DNS entry: {{ server_ip }} console-openshift-console.apps-crc.testing apps-crc.testing oauth-openshift.apps-crc.testing"
