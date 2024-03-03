@@ -1,0 +1,49 @@
+---
+- name: docker_push_ocp
+  hosts: localhost
+  vars:
+    image_name: "{{ image_in }}"
+    image_path: "{{ image_path_in }}"
+    namespace_name: "{{ namespace_in }}"
+    kube_config_path: "{{ kube_config_in }}"
+    ocp_username: "{{ ocp_user | default('') }}"
+    ocp_secret_value: "{{ ocp_secret | default('') }}"
+    registry_url: "{{ registry_url_in | default('default-route-openshift-image-registry.apps-crc.testing') }}"
+  tasks:
+    - name: Build Docker image
+      community.docker.docker_image_build:
+        name: "{{ image_name }}"
+        path: "{{ image_path }}"
+        tag: latest
+    - name: Docker login
+      community.docker.docker_login:
+        validate_certs: false
+        username: "{{ ocp_username }}"
+        password: "{{ ocp_secret_value }}"
+        registry_url: "{{ registry_url }}"
+        tls: false
+        reauthorize: false
+      ignore_errors: false
+    - name: OpenShift create ImageStream
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kube_config_path }}"
+        definition:
+          metadata:
+            name: "{{ image_name }}"
+            namespace: "{{ namespace_name }}"
+          apiVersion: image.openshift.io/v1
+          kind: ImageStream
+        validate_certs: false
+      ignore_errors: false
+    - name: Docker tag image
+      community.docker.docker_image_tag:
+        name: "{{ image_name }}"
+        validate_certs: false
+        repository: "{{ registry_url }}/{{ namespace_name }}/{{ image_name }}"
+        tag: latest
+    - name: Docker push image
+      community.docker.docker_image_push:
+        validate_certs: false
+        name: "{{ registry_url }}/{{ namespace_name }}/{{ image_name }}"
+      ignore_errors: false
