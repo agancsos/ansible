@@ -46,4 +46,5 @@
       community.docker.docker_image_push:
         validate_certs: false
         name: "{{ registry_url }}/{{ namespace_name }}/{{ image_name }}"
+        tag: latest
       ignore_errors: false
