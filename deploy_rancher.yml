@@ -1,0 +1,32 @@
+---
+- name: deploy_rancher.yml
+  hosts: localhost
+  vars:
+    system_dependencies:
+      - haproxy
+      - helm
+      - kubernetes-client
+    cluster_name: "{{ cluster_version_in | default('rancher1') }}"
+    kubeconfig_path: "{{ kubeconfig_path_in | default('/etc/rancher/k3s/k3s.yaml') }}"
+  tasks:
+    - name: Install system dependencies
+      shell: "zypper install -y {{ item }}"
+      loop: "{{ system_dependencies }}"
+    - name: Install k3s
+      shell: "curl -sfL https://get.k3s.io | sh -; k3s server --cluster-init --write-kubeconfig-mode=644 &"
+    # https://github.com/rancher/rancher/issues/43092
+    - name: Downgrade k3s CLI
+      shell: "cp /usr/local/bin/k3s /usr/local/bin/k3s_org; wget wget https://github.com/k3s-io/k3s/releases/download/v1.27.11-rc3%2Bk3s1/k3s; mv k3s /usr/local/bin; systemctl restart k3s"
+    - name: Install Jetstack Helm char repository
+      shell: "helm --kubeconfig={{ kubeconfig_path }} repo add jetstack https://charts.jetstack.io; helm --kubeconfig {{ kubeconfig_path }} repo update"
+    - name: Add Rancher Helm chart repository
+      shell: "helm --kubeconfig {{ kubeconfig_path }} repo add rancher-stable https://releases.rancher.com/server-charts/stable; helm --kubeconfig {{ kubeconfig_path }} repo update"
+    - name: Create cert-manager
+      shell: "helm --kubeconfig {{ kubeconfig_path }} install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace"
+    - name: Create cert-manager resources
+      shell: "kubectl --kubeconfig={{ kubeconfig_path }} apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v1.0.4/cert-manager.crds.yaml"
+    - name: Create cattle-system namespace
+      shell: "kubectl --kubeconfig={{ kubeconfig_path }} create namespace cattle-system"
+    - name: Install Rancher Helm Chart
+      shell: "helm --kubeconfig {{ kubeconfig_path }} install rancher rancher-stable/rancher --namespace cattle-system --set hostname={{ cluster_name }} --set replicas=2"
+      
