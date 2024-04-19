@@ -1,0 +1,16 @@
+---
+- name: deploy_vbox_vm.yml
+  hosts: "{{ nodes }}"
+  vars:
+    VM_NAME: "{{ vm_name_in | default('test') }}"
+    IMAGE_PATH: "{{ image_path_in | default('') }}"
+  tasks:
+    - name: Verify platform and VirtualBox CLI
+      shell: "which VBoxManage"
+    - name: Create virtual machine
+      shell: "VBoxManage createvm --name {{ VM_NAME }} --ostype Linux"
+    - name: Attach image to virtual machine
+      shell: "VBoxManage storageattach '{{ VM_NAME }} --storagectl IDE --port 0 --device 0 --type dvddrive --medium '{{ IMAGE_PATH }}'"
+    - name: Start virtual machine for installation
+      shell: "VBoxManage startvm '{{ VM_NAME }}' --type headless"
+
