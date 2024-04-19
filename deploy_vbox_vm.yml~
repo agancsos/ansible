@@ -1,0 +1,29 @@
+---
+- name: deploy_vbox_vm.yml
+  hosts: "{{ nodes }}"
+  vars:
+    VM_NAME: "{{ vm_name_in | default('test') }}"
+    VM_BASE: "{{ vm_base_in | default('test') }}"
+    IMAGE_NAME: "{{ image_path_in | default('test') }}"
+    VMDK_SIZE: "{{ vmdk_size_in | default('10240') }}"
+  tasks:
+    - name: Verify platform and VirtualBox CLI
+      shell: "which VBoxManage"
+    - name: Create virtual machine
+      shell: "VBoxManage createvm --name '{{ VM_NAME }}' --basefolder '{{ VM_BASE }}' --ostype Linux --register"
+    - name: Create vNIC
+      shell: "VBoxManage modifyvm '{{ VM_NAME }}' --nic1 bridged --bridgeadapter1 eth0"
+    - name: Create controllers
+      shell: "VBoxManage storagectl '{{ VM_NAME }}' {{ item }} --bootable on"
+      loop:
+        - "--name 'SATA Controller' --add sata"
+        - "--name 'IDE' --add ide"
+    - name: Create VMDK
+      shell: "VBoxManage createmedium disk --filename '{{ VM_BASE }}/{{ VM_NAME }}/{{ VM_NAME }}.vmdk' --size {{ VMDK_SIZE }} --format VMDK"
+    - name: Attach VMDK to virtual machine
+      shell: "VBoxManage storageattach '{{ VM_NAME }}' --storagectl 'SATA Controller' --port 0 --device 0 --medium '{{ VM_BASE }}/{{ VM_NAME }}/{{ VM_NAME }}.vmdk' --type hdd"
+    - name: Attach image to virtual machine
+      shell: "VBoxManage storageattach '{{ VM_NAME }}' --storagectl IDE --port 0 --device 0 --type dvddrive --medium '{{ IMAGE_PATH }}'"
+    - name: Start virtual machine for installation
+      shell: "VBoxManage startvm '{{ VM_NAME }}' --type headless"
+
