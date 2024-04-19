@@ -1,0 +1,39 @@
+---
+ - name: upgrade_python.yml
+   hosts: "{{ nodes }}"
+   tasks:
+     - shell: "python3 --version | cut -f 2 -d'.'"
+       register: python_version
+     - name: Download OpenSSL
+       get_url:
+         url: "https://www.openssl.org/source/openssl-1.1.1w.tar.gz"
+         validate_certs: false
+         dest: "."
+         mode: "0755"
+       when: (python_version.stdout | int) > 10
+     - name: Extract OpenSSL
+       unarchive:
+         src: "./openssl-1.1.1w.tar.gz"
+         dest: "."
+       when: (python_version.stdout | int) > 10
+     - name: Install OpenSSL
+       shell: "cd openssl-1.1.1w; ./config --prefix=/usr/local/openssl --openssldir=/usr/local/openssl && make && make install"
+       when: (python_version.stdout | int) > 10
+     - name: Download Python3.12
+       get_url:
+         url: "https://www.python.org/ftp/python/3.12.2/Python-3.12.2.tgz"
+         validate_certs: false
+         dest: "."
+         mode: "0755"
+       when: (python_version.stdout | int) > 10
+     - name: Extract Python3.12
+       unarchive:
+         src: "./Python-3.12.2.tgz"
+         dest: "."
+       when: (python_version.stdout | int) > 10
+     - name: Install Python3.12
+       shell: "cd Python-3.12.2; export OPENSSL_LIBS=/usr/local/lib/libssl.so; ./configure --with-openssl=/usr/local/openssl --with-openssl-rpath=/usr/local/openssl/lib && make && make install"
+       when: (python_version.stdout | int) > 10
+     - name: Install Python packages
+       shell: "pip3 install boto3 requests paramiko"
+
