@@ -43,7 +43,7 @@
        shell: "cd Python-3.12.2; export OPENSSL_LIBS=/usr/local/lib/libssl.so; ./configure --with-openssl=/usr/local/openssl --with-openssl-rpath=/usr/local/openssl/lib && make && make install"
        when: (python_version.stdout | int) < 10
      - name: Update symlink
-       shell: "unlink /bin/python3; cp python /bin/python3.12; ln -s /bin/python3.12 /bin/python3"
+       shell: "unlink /bin/python3; cp ./Python3.12.2/python /bin/python3.12; ln -s /bin/python3.12 /bin/python3"
        when: (python_version.stdout | int) < 10
      - name: Install Python packages
        shell: "python3 -m pip install boto3 requests paramiko"
