@@ -11,6 +11,7 @@
          - make
          - cmake
          - libffi-devel
+         - zlib-devel
      - name: Download OpenSSL
        get_url:
          url: "https://www.openssl.org/source/openssl-1.1.1w.tar.gz"
