@@ -1,1 +1,1 @@
-![Alt ""](https://www.vectorlogo.zone/logos/ansible/ansible-ar21.png)
+Moving forward, please see https://gitlab.abelgancsos.com:9090/github/ansible for latest updates and projects.
